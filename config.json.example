@@ -1,0 +1,18 @@
+{
+  "owners": [],
+  "nickname": "rustynagisa",
+  "username": "rustynagisa",
+  "realname": "Nagisa in Rust",
+  "server": "",
+  "port": 6697,
+  "password": "",
+  "use_ssl": true,
+  "encoding": "UTF-8",
+  "channels": [],
+  "umodes": "+RB-x",
+  "ping_time": 180,
+  "ping_timeout": 10,
+  "options": {
+    "weather_apikey": "obtain key from http://openweathermap.org/"
+  }
+}
