@@ -13,7 +13,6 @@ use std::collections::HashMap;
 
 fn main() {
     let mut weather_savedlocations : HashMap<String, String> = HashMap::new();
-    weather_savedlocations.insert("hi".to_string(), "1".to_string());
 
     let server = IrcServer::new("config.json").unwrap();
     server.identify().unwrap();
