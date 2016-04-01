@@ -77,72 +77,40 @@ fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()>
         return Err(());
     }
 
-    let city = match data.find("name") {
-        Some(i) => match i.as_string() {
-            Some(j) => j,
-            None => return Err(())
-        },
+    let city = match data.find("name").and_then(|i| i.as_string()) {
+        Some(j) => j,
         None => return Err(())
     };
-    let country = match data.find("sys") {
-        Some(i) => match i.find("country") {
-            Some(j) => match j.as_string() {
-                Some(k) => k,
-                None => return Err(())
-            },
-            None => return Err(())
-        },
+    let country = match data.find("sys").and_then(|i| i.find("country")).and_then(|j| j.as_string()) {
+        Some(k) => k,
         None => return Err(())
     };
 
-    let weather_arr = match data.find("weather") {
-        Some(i) => match i.as_array() {
-            Some(j) => j,
-            None => return Err(())
-        },
+    let weather_arr = match data.find("weather").and_then(|i| i.as_array()) {
+        Some(j) => j,
         None => return Err(())
     };
     if weather_arr.len() == 0 {
         return Err(());
     }
-    let weather_main = match weather_arr[0].find("main") {
-        Some(i) => match i.as_string() {
-            Some(j) => j,
-            None => return Err(())
-        },
+    let weather_main = match weather_arr[0].find("main").and_then(|i| i.as_string()) {
+        Some(j) => j,
         None => return Err(())
     };
-
-    let weather_desc = match weather_arr[0].find("description") {
-        Some(i) => match i.as_string() {
-            Some(j) => j,
-            None => return Err(())
-        },
+    let weather_desc = match weather_arr[0].find("description").and_then(|i| i.as_string()) {
+        Some(j) => j,
         None => return Err(())
     };
     let weather_temp = match data.find("main").and_then(|i| i.find("temp")).and_then(|j| j.as_f64()) {
         Some(k) => k,
         None => return Err(())
     };
-
-    let weather_humidity = match data.find("main") {
-        Some(i) => match i.find("humidity") {
-            Some(j) => match j.as_f64() {
-                Some(k) => k,
-                None => return Err(())
-            },
-            None => return Err(())
-        },
+    let weather_humidity = match data.find("main").and_then(|i| i.find("humidity")).and_then(|j| j.as_f64()) {
+        Some(k) => k,
         None => return Err(())
     };
-    let weather_windspeed = match data.find("wind") {
-        Some(i) => match i.find("speed") {
-            Some(j) => match j.as_f64() {
-                Some(k) => k,
-                None => return Err(())
-            },
-            None => return Err(())
-        },
+    let weather_windspeed = match data.find("wind").and_then(|i| i.find("speed")).and_then(|j| j.as_f64()) {
+        Some(k) => k,
         None => return Err(())
     };
 
