@@ -6,10 +6,15 @@ extern crate url;
 use irc::client::prelude::*;
 use irc::client::data::Command::PRIVMSG;
 use std::io::Read;
+use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use url::percent_encoding;
+use std::collections::HashMap;
 
 fn main() {
+    let mut weather_savedlocations : HashMap<String, String> = HashMap::new();
+    weather_savedlocations.insert("hi".to_string(), "1".to_string());
+
     let server = IrcServer::new("config.json").unwrap();
     server.identify().unwrap();
     for message in server.iter() {
@@ -21,10 +26,15 @@ fn main() {
                 continue;
             }
 
+            let user = match msg.source_nickname() {
+                Some(i) => i,
+                None => continue,
+            };
+
             let command = text.split_whitespace().next().unwrap();
             let (_, arguments) = text.split_at(command.len());
             let _result = match command {
-                "!w" => weather(&server, channel, arguments.trim()),
+                "!w" => weather(&server, &mut weather_savedlocations, channel, user, arguments.trim()),
                 _ => Ok(()),
             };
         }
@@ -32,14 +42,30 @@ fn main() {
     return;
 }
 
-fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()> {
+fn weather(server: &IrcServer, saved_locations: &mut HashMap<String, String>,
+           channel: &str, user: &str, arguments: &str)
+           -> Result<(), ()> {
+    let mut location = arguments.to_string();
+    if arguments.len() == 0 {
+        location = match saved_locations.get(user) {
+            Some(i) => i.clone(),
+            None => {
+                server.send_privmsg(channel, "No saved location").unwrap();
+                return Err(());
+            },
+        }
+    }
+
     let httpclient = hyper::Client::new();
     let apikey = match server.config().options.as_ref()
         .and_then(|i| i.get("weather_apikey")) {
             Some(j) => j,
             None => return Err(()),
     };
-    let httpurl = format!("http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&APPID={}", percent_encoding::percent_encode(arguments.as_bytes(), percent_encoding::QUERY_ENCODE_SET), apikey);
+    let httpurl = format!(
+        "http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&APPID={}",
+        percent_encoding::percent_encode(location.as_bytes(), percent_encoding::QUERY_ENCODE_SET),
+        apikey);
     let mut httpreq = match httpclient.get(&httpurl)
         .header(hyper::header::Connection::close())
         .send() {
@@ -76,6 +102,8 @@ fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()>
     else {
         return Err(());
     }
+
+    saved_locations.insert(user.to_string(), location.to_string());
 
     let city = match data.find("name")
         .and_then(|i| i.as_string()) {
