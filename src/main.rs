@@ -120,14 +120,8 @@ fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()>
         },
         None => return Err(())
     };
-    let weather_temp = match data.find("main") {
-        Some(i) => match i.find("temp") {
-            Some(j) => match j.as_f64() {
-                Some(k) => k,
-                None => return Err(())
-            },
-            None => return Err(())
-        },
+    let weather_temp = match data.find("main").and_then(|i| i.find("temp")).and_then(|j| j.as_f64()) {
+        Some(k) => k,
         None => return Err(())
     };
 
