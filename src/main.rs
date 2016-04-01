@@ -5,14 +5,26 @@ extern crate url;
 
 use irc::client::prelude::*;
 use irc::client::data::Command::PRIVMSG;
-use std::io::Read;
 use rustc_serialize::json;
 use rustc_serialize::json::Json;
 use url::percent_encoding;
 use std::collections::HashMap;
+use std::fs::File;
+use std::io::prelude::*;
 
 fn main() {
     let mut weather_savedlocations : HashMap<String, String> = HashMap::new();
+    let mut weather_savedlocations_json = String::new();
+    match File::open("weather_savedlocations.json")
+               .and_then(|mut i| i.read_to_string(&mut weather_savedlocations_json)) {
+        Ok(_) => {
+            match json::decode(&weather_savedlocations_json) {
+                Ok(j) => {weather_savedlocations = j;},
+                Err(_) => {},
+            };
+        },
+        Err(_) => {},
+    }
 
     let server = IrcServer::new("config.json").unwrap();
     server.identify().unwrap();
@@ -103,6 +115,10 @@ fn weather(server: &IrcServer, saved_locations: &mut HashMap<String, String>,
     }
 
     saved_locations.insert(user.to_string(), location.to_string());
+    let saved_locations_json = json::encode(saved_locations).unwrap();
+    File::create("weather_savedlocations.json")
+        .and_then(|mut i| i.write_all(saved_locations_json.as_bytes()))
+        .unwrap();
 
     let city = match data.find("name")
         .and_then(|i| i.as_string()) {
