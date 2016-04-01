@@ -34,11 +34,8 @@ fn main() {
 
 fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()> {
     let httpclient = hyper::Client::new();
-    let apikey = match server.config().options {
-        Some(ref i) => match i.get("weather_apikey") {
-            Some(j) => j,
-            None => return Err(())
-        },
+    let apikey = match server.config().options.as_ref().and_then(|ref i| i.get("weather_apikey")) {
+        Some(j) => j,
         None => return Err(())
     };
     let httpurl = format!("http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&APPID={}", percent_encoding::percent_encode(arguments.as_bytes(), percent_encoding::QUERY_ENCODE_SET), apikey);
