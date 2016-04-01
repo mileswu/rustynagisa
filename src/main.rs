@@ -125,13 +125,13 @@ fn weather(server: &IrcServer, channel: &str, arguments: &str) -> Result<(), ()>
             None => return Err(()),
     };
 
-    let reply = format!("{}, {}: {} ({}) {}C, {} m/s wind, {}% humidity",
+    let reply = format!("{}, {}: {} ({}) {:.0}C, {:.0} km/hr wind, {}% humidity",
         city,
         country,
         weather_main,
         weather_desc,
         weather_temp,
-        weather_windspeed,
+        weather_windspeed*3.6,
         weather_humidity);
 
     server.send_privmsg(channel, &reply).unwrap();
