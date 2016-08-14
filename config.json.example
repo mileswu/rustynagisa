@@ -13,6 +13,7 @@
   "ping_time": 180,
   "ping_timeout": 10,
   "options": {
-    "weather_apikey": "obtain key from http://openweathermap.org/"
+    "gmaps_geocoding_apikey" : "obtain key from https://developers.google.com/maps/documentation/geocoding/start",
+    "forecast_apikey": "obtain key from https://developer.forecast.io/"
   }
 }

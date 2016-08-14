@@ -53,6 +53,82 @@ fn main() {
     return;
 }
 
+fn get_lonlat(server: &IrcServer, location: &str) -> Result<(f64, f64, String), ()> {
+    let apikey = match server.config().options.as_ref()
+        .and_then(|i| i.get("gmaps_geocoding_apikey")) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let httpurl = format!(
+        "https://maps.googleapis.com/maps/api/geocode/json?address={}&key={}",
+        percent_encoding::percent_encode(location.as_bytes(), percent_encoding::QUERY_ENCODE_SET),
+        apikey);
+    let httpclient = hyper::Client::new();
+    let mut httpreq = match httpclient.get(&httpurl)
+        .header(hyper::header::Connection::close())
+        .send() {
+            Ok(req) => req,
+            Err(_) => return Err(()),
+    };
+
+    if httpreq.status != hyper::status::StatusCode::Ok {
+        return Err(());
+    }
+
+    let mut httpbody = String::new();
+    let _size = httpreq.read_to_string(&mut httpbody);
+
+    let data = match Json::from_str(&httpbody) {
+        Ok(d) => d,
+        Err(_) => return Err(()),
+    };
+
+    let status = match data.find("status")
+        .and_then(|i| i.as_string()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+    if status != "OK" {
+        return Err(());
+    }
+
+    let results = match data.search("results")
+        .and_then(|i| i.as_array()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    if results.len() == 0 {
+        return Err(());
+    }
+
+    let formatted_address = match results[0].find("formatted_address")
+        .and_then(|i| i.as_string()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let location = match results[0].find("geometry")
+        .and_then(|i| i.find("location")) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let lat = match location.find("lat")
+        .and_then(|i| i.as_f64()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+    let lon = match location.find("lng")
+        .and_then(|i| i.as_f64()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    return Ok((lat, lon, formatted_address.to_string()));
+}
+
 fn weather(server: &IrcServer, saved_locations: &mut HashMap<String, String>,
            channel: &str, user: &str, arguments: &str)
            -> Result<(), ()> {
@@ -67,52 +143,10 @@ fn weather(server: &IrcServer, saved_locations: &mut HashMap<String, String>,
         }
     }
 
-    let httpclient = hyper::Client::new();
-    let apikey = match server.config().options.as_ref()
-        .and_then(|i| i.get("weather_apikey")) {
-            Some(j) => j,
-            None => return Err(()),
-    };
-    let httpurl = format!(
-        "http://api.openweathermap.org/data/2.5/weather?q={}&units=metric&APPID={}",
-        percent_encoding::percent_encode(location.as_bytes(), percent_encoding::QUERY_ENCODE_SET),
-        apikey);
-    let mut httpreq = match httpclient.get(&httpurl)
-        .header(hyper::header::Connection::close())
-        .send() {
-            Ok(req) => req,
-            Err(_) => return Err(()),
-    };
-    let mut httpbody = String::new();
-    let _size = httpreq.read_to_string(&mut httpbody);
-
-    let data = match Json::from_str(&httpbody) {
-        Ok(d) => d,
+    let (lon, lat, formatted_address) = match get_lonlat(server, &location) {
+        Ok(i) => i,
         Err(_) => return Err(()),
     };
-    println!("{}", data);
-
-    let returncode = match data.find("cod") {
-        Some(i) => i,
-        None => return Err(()),
-    };
-    if returncode.is_string() {
-        if returncode.as_string().unwrap() == "404" {
-            server.send_privmsg(channel,
-                                &format!("Location ({}) not found", arguments))
-                .unwrap();
-        }
-        return Err(());
-    }
-    else if returncode.is_number() {
-        if returncode.as_u64().unwrap() != 200 {
-            server.send_privmsg(channel, "Error").unwrap();
-            return Err(());
-        }
-    }
-    else {
-        return Err(());
-    }
 
     saved_locations.insert(user.to_string(), location.to_string());
     let saved_locations_json = json::encode(saved_locations).unwrap();
@@ -120,62 +154,71 @@ fn weather(server: &IrcServer, saved_locations: &mut HashMap<String, String>,
         .and_then(|mut i| i.write_all(saved_locations_json.as_bytes()))
         .unwrap();
 
-    let city = match data.find("name")
-        .and_then(|i| i.as_string()) {
+    let httpclient = hyper::Client::new();
+    let forecast_apikey = match server.config().options.as_ref()
+        .and_then(|i| i.get("forecast_apikey")) {
             Some(j) => j,
-            None => return Err(()),
-    };
-    let country = match data.find("sys")
-        .and_then(|i| i.find("country"))
-        .and_then(|j| j.as_string()) {
-            Some(k) => k,
             None => return Err(()),
     };
 
-    let weather_arr = match data.find("weather")
-        .and_then(|i| i.as_array()) {
-            Some(j) => j,
-            None => return Err(()),
+    let httpurl = format!(
+        "https://api.forecast.io/forecast/{}/{},{}?units=si",
+        forecast_apikey,
+        lon, lat);
+    let mut httpreq = match httpclient.get(&httpurl)
+        .header(hyper::header::Connection::close())
+        .send() {
+            Ok(req) => req,
+            Err(_) => return Err(()),
     };
-    if weather_arr.len() == 0 {
+
+    if httpreq.status != hyper::status::StatusCode::Ok {
         return Err(());
     }
-    let weather_main = match weather_arr[0].find("main")
-        .and_then(|i| i.as_string()) {
-            Some(j) => j,
-            None => return Err(()),
+
+    let mut httpbody = String::new();
+    let _size = httpreq.read_to_string(&mut httpbody);
+
+    let data = match Json::from_str(&httpbody) {
+        Ok(d) => d,
+        Err(_) => return Err(()),
     };
-    let weather_desc = match weather_arr[0].find("description")
-        .and_then(|i| i.as_string()) {
-            Some(j) => j,
-            None => return Err(()),
-    };
-    let weather_temp = match data.find("main")
-        .and_then(|i| i.find("temp"))
-        .and_then(|j| j.as_f64()) {
-            Some(k) => k,
-            None => return Err(()),
-    };
-    let weather_humidity = match data.find("main")
-        .and_then(|i| i.find("humidity")).and_then(|j| j.as_f64()) {
-        Some(k) => k,
+
+    let data_current = match data.find("currently") {
+        Some(i) => i,
         None => return Err(()),
     };
-    let weather_windspeed = match data.find("wind")
-        .and_then(|i| i.find("speed"))
-        .and_then(|j| j.as_f64()) {
-            Some(k) => k,
+
+    let summary = match data_current.find("summary")
+        .and_then(|i| i.as_string()) {
+            Some(j) => j,
             None => return Err(()),
     };
 
-    let reply = format!("{}, {}: {} ({}) {:.0}C, {:.0} km/hr wind, {}% humidity",
-        city,
-        country,
-        weather_main,
-        weather_desc,
-        weather_temp,
-        weather_windspeed*3.6,
-        weather_humidity);
+    let temperature = match data_current.find("temperature")
+        .and_then(|i| i.as_f64()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let humidity = match data_current.find("humidity")
+        .and_then(|i| i.as_f64()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let windspeed = match data_current.find("windSpeed")
+        .and_then(|i| i.as_f64()) {
+            Some(j) => j,
+            None => return Err(()),
+    };
+
+    let reply = format!("{}: {} {:.0}C, {:.0} km/hr wind, {:.0}% humidity",
+        formatted_address,
+        summary,
+        temperature,
+        windspeed*3.6,
+        humidity*100.0);
 
     server.send_privmsg(channel, &reply).unwrap();
     return Ok(());
